@@ -32,6 +32,7 @@ local json = require('rapidjson')
 -- Internal constants
 -- Don't touch these unless you know what you're doing
 local METADATA_ROOT = nil
+local METADATA_FILE = nil
 local LIBRARY_ROOT = nil
 local SETTINGS_FILE =
     DataStorage:getSettingsDir() .. '/calibre_collections.lua'
@@ -160,10 +161,14 @@ local function initConstants()
     if LIBRARY_ROOT ~= nil and METADATA_ROOT == nil then
         local dir = LIBRARY_ROOT
         while dir do
-            local candidate = dir .. '/metadata.calibre'
-            if lfs.attributes(candidate, 'mode') == 'file' then
-                METADATA_ROOT = dir
-                break
+            for _, file in ipairs({ 'metadata.calibre', '.metadata.calibre' }) do
+                local candidate = dir .. '/' .. file
+                if lfs.attributes(candidate, 'mode') == 'file' then
+                    METADATA_ROOT = dir
+                    METADATA_FILE = file
+                    logger.info('Using metadata file:', METADATA_ROOT .. '/' .. METADATA_FILE)
+                    return
+                end
             end
 
             local parent = dir:match('(.+)/[^/]+$')
@@ -173,18 +178,18 @@ local function initConstants()
             dir = parent
         end
     end
-    logger.info('Using metadata file:', METADATA_ROOT .. '/metadata.calibre')
+    logger.warn('No metadata file found')
 end
 
 local function loadMetadata()
     initConstants()
     local f
     if METADATA_ROOT ~= nil then
-        f = io.open(METADATA_ROOT .. '/metadata.calibre', 'rb')
+        f = io.open(METADATA_ROOT .. '/' .. METADATA_FILE, 'rb')
     end
     if not f then
         logger.warn(
-            'Calibre Collections: metadata.calibre not found'
+            'Calibre Collections: Calibre metadata not found'
         )
         return nil
     end
