@@ -13,7 +13,9 @@
 
 -- !!! Change this variable if you want to use a different custom column name
 -- Note that you need to add a # to the front.
-local CUSTOM_COLUMN_USED = '#collections'
+local CUSTOM_COLUMN_USED = '#collections' -- string
+-- Or use an array, colliding collection names are merged into one collection
+-- local CUSTOM_COLUMN_USED = { '#collections', '#other_collection_column' } --array
 local MARKER = '⚡'
 
 -- You shouldn't need to touch anything after this line
@@ -211,17 +213,79 @@ local function loadMetadata()
     return data
 end
 
+local VALID_CUSTOM_COLUMNS = nil
+local function getConfiguredColumns()
+    if VALID_CUSTOM_COLUMNS ~= nil then
+        return VALID_CUSTOM_COLUMNS
+    end
+
+    local columns = type(CUSTOM_COLUMN_USED) == 'table'
+        and CUSTOM_COLUMN_USED
+        or { CUSTOM_COLUMN_USED }
+
+    VALID_CUSTOM_COLUMNS = {}
+    for _, column_name in ipairs(columns) do
+        if type(column_name) == 'string' and column_name:sub(1, 1) == '#' then
+            table.insert(VALID_CUSTOM_COLUMNS, column_name)
+        else
+            logger.warn(string.format(
+                'Calibre Collections: skipping invalid custom column %q (must start with #)',
+                tostring(column_name)
+            ))
+        end
+    end
+
+    return VALID_CUSTOM_COLUMNS
+end
+
+local function addCollectionValue(collections, value)
+    if not value then
+        return
+    end
+
+    if type(value) == 'string' then
+        value = value:match('^%s*(.-)%s*$')
+        if value ~= '' then
+            collections[value] = true
+        end
+        return
+    end
+
+    if type(value) == 'table' then
+        -- calibre multi-value custom columns may come through as arrays
+        for _, item in ipairs(value) do
+            if type(item) == 'string' then
+                item = item:match('^%s*(.-)%s*$')
+                if item ~= '' then
+                    collections[item] = true
+                end
+            end
+        end
+    end
+end
+
 local function getBookCollections(book)
     local md = book.user_metadata
     if not md then
         return nil
     end
 
-    local c = md[CUSTOM_COLUMN_USED]
-    if not c then
+    local columns = VALID_CUSTOM_COLUMNS
+    if not columns or #columns == 0 then
+        logger.warn('No valid collection columns were configured.')
         return nil
     end
-    return c['#value#']
+
+    local collections = {}
+
+    for _, column_name in ipairs(columns) do
+        local c = md[column_name]
+        if c and c['#value#'] ~= nil then
+            addCollectionValue(collections, c['#value#'])
+        end
+    end
+
+    return next(collections) and collections or nil
 end
 
 local function getBookPath(book)
@@ -246,7 +310,7 @@ local function buildDesiredMembership(metadata)
                 getBookCollections(book)
 
             if collections then
-                for _, collection in ipairs(collections) do
+                for collection in pairs(collections) do
                     desired[collection] =
                         desired[collection] or {}
 
@@ -303,6 +367,7 @@ local function runSync()
         return
     end
 
+    getConfiguredColumns()
     local desired =
         buildDesiredMembership(metadata)
 

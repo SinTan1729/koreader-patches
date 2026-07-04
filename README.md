@@ -9,7 +9,8 @@ is provided below. This is only tested on a Kobo Clara BW, but should work on al
 1. Calibre Collections
 
    This automatically creates KOReader collections using a custom collection from calibre. By default, a custom column called
-   `#collections` is used. But the script can easily be edited to use any other column name.
+   `#collections` is used. But the script can easily be edited to use any other column name. It can also work with multiple
+   columns if an array is provided instead. Colliding collection names are merged into one collection.
 
    It does not touch already existing collections. So please don't create any collections with the same name an entry in `#collections` (or
    the chosen column) manually. Collections are created/updated at startup.
